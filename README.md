@@ -21,7 +21,7 @@ Ne jamais ajouter le fichier `.p12`, ses mots de passe, ou un jeton GitHub au d�
 
 ## Publication et mise à jour
 
-Chaque push sur `main` déclenche `.github/workflows/android-release.yml`. Le workflow compile et signe l’APK, l’attache à un GitHub Release `v1.0.N` et l’archive aussi comme artifact du workflow. `N` augmente avec le numéro d’exécution Actions.
+Chaque push sur `main` déclenche `.github/workflows/android-release.yml`. Le workflow compile et signe l’APK, l’attache à un GitHub Release `v1.0.N` sous le nom `Touch-1.0.N.apk` et l’archive aussi comme artifact du workflow. `N` augmente avec le numéro d’exécution Actions.
 
 À l’ouverture, l’application vérifie la dernière version publiée via l’API publique GitHub. Si une version plus récente existe, elle propose le téléchargement et ouvre l’installateur système Android. Android exige l’accord de l’utilisateur et peut demander l’autorisation d’installer des applications provenant de cette source ; l’installation silencieuse n’est pas possible pour une application ordinaire.
 

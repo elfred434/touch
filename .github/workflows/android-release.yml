@@ -54,11 +54,14 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.TOUCH_RELEASE_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
 
+      - name: Name versioned APK
+        run: cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/Touch-${VERSION_NAME}.apk"
+
       - name: Upload APK as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: Touch-${{ env.VERSION_NAME }}
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/Touch-${{ env.VERSION_NAME }}.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -72,5 +75,5 @@ jobs:
             VersionCode: ${{ env.VERSION_CODE }}
 
             APK Android signé, généré automatiquement par GitHub Actions.
-          files: app/build/outputs/apk/release/app-release.apk
+          files: app/build/outputs/apk/release/Touch-${{ env.VERSION_NAME }}.apk
           make_latest: true
