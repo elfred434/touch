@@ -3,6 +3,7 @@ package com.elfred434.touch
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -46,6 +47,11 @@ class TouchAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
     override fun onInterrupt() = Unit
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        rebuildOverlay()
+    }
+
     override fun onDestroy() {
         removeOverlay()
         if (current === this) current = null
@@ -56,6 +62,7 @@ class TouchAccessibilityService : AccessibilityService() {
         removeOverlay()
         val p = TouchPrefs.prefs(this)
         if (!p.getBoolean(TouchPrefs.ENABLED, true)) return
+        if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && !p.getBoolean(TouchPrefs.LANDSCAPE, false)) return
         val density = resources.displayMetrics.density
         val width = (p.getInt(TouchPrefs.ZONE_WIDTH_DP, 82) * density).toInt().coerceAtLeast(36)
         val height = (p.getInt(TouchPrefs.ZONE_HEIGHT_DP, 50) * density).toInt().coerceAtLeast(32)
@@ -126,10 +133,15 @@ class TouchAccessibilityService : AccessibilityService() {
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
                 val elapsed = event.eventTime - downTime
-                if (moved && abs(dx) > abs(dy) && abs(dx) > touchSlop) {
+                if (moved && maxOf(abs(dx), abs(dy)) > touchSlop) {
                     pendingTapCount = 0
                     tapRunnable?.let(mainHandler::removeCallbacks); tapRunnable = null
-                    trigger(if (dx < 0) TouchPrefs.SWIPE_LEFT else TouchPrefs.SWIPE_RIGHT)
+                    val gesture = if (abs(dx) > abs(dy)) {
+                        if (dx < 0) TouchPrefs.SWIPE_LEFT else TouchPrefs.SWIPE_RIGHT
+                    } else {
+                        if (dy < 0) TouchPrefs.SWIPE_UP else TouchPrefs.SWIPE_DOWN
+                    }
+                    trigger(gesture)
                 } else if (!longTriggered && elapsed < 600) {
                     pendingTapCount = (pendingTapCount + 1).coerceAtMost(3)
                     tapRunnable?.let(mainHandler::removeCallbacks)
@@ -151,11 +163,31 @@ class TouchAccessibilityService : AccessibilityService() {
 
     private fun trigger(gesture: String) {
         val p = TouchPrefs.prefs(this)
-        if (p.getBoolean(TouchPrefs.HAPTICS, true)) {
-            @Suppress("DEPRECATION")
-            zoneView?.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        when (p.getString(TouchPrefs.HAPTIC_PROFILE, "standard")) {
+            "off" -> Unit
+            "soft" -> vibrate(10, 50)
+            "mechanical" -> vibrate(18, 145)
+            "deep" -> vibrate(34, 230)
+            else -> zoneView?.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
         }
-        performConfiguredAction(TouchPrefs.actionFor(this, gesture))
+        val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+        val contextOverride = gesture == TouchPrefs.DOUBLE_TAP &&
+            p.getBoolean(TouchPrefs.CONTEXT_OVERRIDE_ENABLED, false) && audio.isMusicActive
+        val action = if (contextOverride)
+            p.getString(TouchPrefs.CONTEXT_DOUBLE_TAP_ACTION, TouchPrefs.MEDIA_NEXT) ?: TouchPrefs.MEDIA_NEXT
+        else TouchPrefs.actionFor(this, gesture)
+        performConfiguredAction(action)
+    }
+
+    private fun vibrate(durationMs: Long, amplitude: Int) {
+        try {
+            @Suppress("DEPRECATION")
+            val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+                (getSystemService(VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager).defaultVibrator
+            } else getSystemService(VIBRATOR_SERVICE) as android.os.Vibrator
+            if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(android.os.VibrationEffect.createOneShot(durationMs, amplitude))
+            else vibrator.vibrate(durationMs)
+        } catch (_: Exception) { }
     }
 
     private fun performConfiguredAction(action: String) {
@@ -180,8 +212,19 @@ class TouchAccessibilityService : AccessibilityService() {
                 TouchPrefs.VOLUME_UP -> (getSystemService(AUDIO_SERVICE) as AudioManager).adjustStreamVolume(STREAM_MUSIC, ADJUST_RAISE, FLAG_SHOW_UI)
                 TouchPrefs.VOLUME_DOWN -> (getSystemService(AUDIO_SERVICE) as AudioManager).adjustStreamVolume(STREAM_MUSIC, ADJUST_LOWER, FLAG_SHOW_UI)
                 TouchPrefs.POWER -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
-                TouchPrefs.NOTES, TouchPrefs.TIMER, TouchPrefs.OPEN_APP -> {
+                TouchPrefs.NOTES, TouchPrefs.TIMER, TouchPrefs.QUICK_WIDGETS -> {
                     startActivity(Intent(this, MainActivity::class.java).putExtra("open_tool", action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                }
+                TouchPrefs.OPEN_APP -> {
+                    val packageName = TouchPrefs.prefs(this).getString(TouchPrefs.APP_PACKAGE, null)
+                    val launch = packageName?.let { packageManager.getLaunchIntentForPackage(it) }
+                    if (launch != null) startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    else startActivity(Intent(this, MainActivity::class.java).putExtra("open_tool", "app_picker").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                }
+                TouchPrefs.TASKER -> {
+                    val taskName = TouchPrefs.prefs(this).getString("tasker_task_name", "")?.trim().orEmpty()
+                    if (taskName.isBlank()) startActivity(Intent(this, MainActivity::class.java).putExtra("open_tool", "tasker").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    else sendBroadcast(Intent("net.dinglisch.android.tasker.ACTION_TASK").putExtra("task_name", taskName))
                 }
                 else -> Unit
             }
