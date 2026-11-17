@@ -124,8 +124,8 @@ private fun TouchRoot(initialTool: String? = null) {
         val found = update!!
         AlertDialog(onDismissRequest = { showUpdate = false }, containerColor = Surface1,
             title = { Text("Mise à jour disponible") },
-            text = { Text("Touch ${found.versionName} est disponible. Pour installer cette version, Android demandera une confirmation.", color = TextMuted) },
-            confirmButton = { TextButton(onClick = { showUpdate = false; UpdateManager.startInstall(context, found) }) { Text("Télécharger") } },
+            text = { Text("Touch ${found.versionName} est disponible. Le lien APK s’ouvrira dans ton navigateur ; l’installation se fera ensuite par le processus normal d’Android.", color = TextMuted) },
+            confirmButton = { TextButton(onClick = { showUpdate = false; UpdateManager.openDownloadPage(context, found) }) { Text("Ouvrir le téléchargement") } },
             dismissButton = { TextButton(onClick = { showUpdate = false }) { Text("Plus tard") } })
     }
     if (showNotice) AlertDialog(onDismissRequest = { showNotice = false }, containerColor = Surface1,
