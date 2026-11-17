@@ -167,9 +167,9 @@ class TouchAccessibilityService : AccessibilityService() {
                     else toast("Capture d’écran non prise en charge par cette version d’Android.")
                 }
                 TouchPrefs.CAMERA -> startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                TouchPrefs.MEDIA_PLAY_PAUSE -> sendMediaKey(KEYCODE_MEDIA_PLAY_PAUSE)
-                TouchPrefs.MEDIA_NEXT -> sendMediaKey(KEYCODE_MEDIA_NEXT)
-                TouchPrefs.MEDIA_PREVIOUS -> sendMediaKey(KEYCODE_MEDIA_PREVIOUS)
+                TouchPrefs.MEDIA_PLAY_PAUSE -> sendMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                TouchPrefs.MEDIA_NEXT -> sendMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_NEXT)
+                TouchPrefs.MEDIA_PREVIOUS -> sendMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS)
                 TouchPrefs.RINGER -> toggleRinger()
                 TouchPrefs.DND -> openDndSettingsOrToggle()
                 TouchPrefs.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
