@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Touch</string>
+    <string name="accessibility_service_description">Détecte les gestes dans la zone tactile choisie pour exécuter les actions configurées. Le service ne lit pas le contenu des écrans.</string>
+</resources>
