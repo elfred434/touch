@@ -11,7 +11,11 @@ object TouchPrefs {
     const val ZONE_X_PERCENT = "zone_x_percent"
     const val ZONE_Y_DP = "zone_y_dp"
     const val HAPTICS = "haptics"
+    const val HAPTIC_PROFILE = "haptic_profile"
     const val LANDSCAPE = "landscape"
+    const val APP_PACKAGE = "app_package"
+    const val CONTEXT_OVERRIDE_ENABLED = "context_override_enabled"
+    const val CONTEXT_DOUBLE_TAP_ACTION = "context_double_tap_action"
 
     const val TAP = "tap"
     const val DOUBLE_TAP = "double_tap"
@@ -19,6 +23,8 @@ object TouchPrefs {
     const val LONG_PRESS = "long_press"
     const val SWIPE_LEFT = "swipe_left"
     const val SWIPE_RIGHT = "swipe_right"
+    const val SWIPE_DOWN = "swipe_down"
+    const val SWIPE_UP = "swipe_up"
 
     const val TORCH = "torch"
     const val SCREENSHOT = "screenshot"
@@ -39,6 +45,8 @@ object TouchPrefs {
     const val POWER = "power"
     const val NOTES = "notes"
     const val TIMER = "timer"
+    const val QUICK_WIDGETS = "quick_widgets"
+    const val TASKER = "tasker"
 
     data class Gesture(val key: String, val label: String, val symbol: String)
     val gestures = listOf(
@@ -47,7 +55,9 @@ object TouchPrefs {
         Gesture(TRIPLE_TAP, "Triple appui", "●●●"),
         Gesture(LONG_PRESS, "Appui long", "⏱"),
         Gesture(SWIPE_LEFT, "Glissement gauche", "←"),
-        Gesture(SWIPE_RIGHT, "Glissement droite", "→")
+        Gesture(SWIPE_RIGHT, "Glissement droite", "→"),
+        Gesture(SWIPE_DOWN, "Glissement vers le bas", "↓"),
+        Gesture(SWIPE_UP, "Glissement vers le haut", "↑")
     )
 
     data class Action(val key: String, val label: String, val category: String, val detail: String)
@@ -69,8 +79,10 @@ object TouchPrefs {
         Action(VOLUME_UP, "Volume +", "Système", "Augmente le volume multimédia"),
         Action(VOLUME_DOWN, "Volume −", "Système", "Baisse le volume multimédia"),
         Action(POWER, "Menu d’alimentation", "Système", "Ouvre le menu d’alimentation"),
-        Action(NOTES, "Notes épinglées", "Outils", "Ouvre Touch sur les notes"),
-        Action(TIMER, "Minuteur", "Outils", "Ouvre Touch sur le minuteur")
+        Action(NOTES, "Notes épinglées", "Outils", "Ouvre tes notes et checklists"),
+        Action(TIMER, "Minuteur / focus", "Outils", "Minuteur et chronomètre"),
+        Action(QUICK_WIDGETS, "Panneau rapide", "Outils", "Média, volume, luminosité et minuteur"),
+        Action(TASKER, "Déclencher Tasker", "Automatisations", "Envoie une tâche Tasker nommée")
     )
 
     fun prefs(context: Context): SharedPreferences =
@@ -83,6 +95,8 @@ object TouchPrefs {
         LONG_PRESS -> CAMERA
         SWIPE_LEFT -> MEDIA_PREVIOUS
         SWIPE_RIGHT -> MEDIA_NEXT
+        SWIPE_DOWN -> QUICK_WIDGETS
+        SWIPE_UP -> QUICK_SETTINGS
         else -> ""
     }
 

@@ -13,6 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -34,18 +36,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val Bg = Color(0xFF111319)
-private val Surface1 = Color(0xFF191C21)
-private val Surface2 = Color(0xFF21262D)
-private val Mint = Color(0xFF00E293)
-private val TextPrimary = Color(0xFFE1E2E9)
-private val TextMuted = Color(0xFF9BA6A0)
+internal val Bg = Color(0xFF111319)
+internal val Surface1 = Color(0xFF191C21)
+internal val Surface2 = Color(0xFF21262D)
+internal val Mint = Color(0xFF00E293)
+internal val TextPrimary = Color(0xFFE1E2E9)
+internal val TextMuted = Color(0xFF9BA6A0)
 
 class MainActivity : ComponentActivity() {
+    private val openedTool = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val initialTool = intent?.getStringExtra("open_tool")
-        setContent { TouchTheme { TouchRoot(initialTool) } }
+        openedTool.value = intent?.getStringExtra("open_tool")
+        setContent { TouchTheme { TouchRoot(openedTool.value) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openedTool.value = intent.getStringExtra("open_tool")
     }
 
     override fun onResume() {
@@ -68,7 +78,11 @@ private fun TouchTheme(content: @Composable () -> Unit) {
 private fun TouchRoot(initialTool: String? = null) {
     val context = LocalContext.current
     val prefs = remember { TouchPrefs.prefs(context) }
-    var tab by remember { mutableStateOf(if (initialTool == TouchPrefs.NOTES || initialTool == TouchPrefs.TIMER) 2 else 0) }
+    var tab by remember { mutableStateOf(if (initialTool != null) 2 else 0) }
+    var toolPage by remember { mutableStateOf(initialTool) }
+    LaunchedEffect(initialTool) {
+        if (initialTool != null) { toolPage = initialTool; tab = 2 }
+    }
     var update by remember { mutableStateOf<AppUpdate?>(null) }
     var updateChecked by remember { mutableStateOf(false) }
     var showUpdate by remember { mutableStateOf(false) }
@@ -89,7 +103,7 @@ private fun TouchRoot(initialTool: String? = null) {
                 val labels = listOf("Accueil", "Gestes", "Actions", "Calibrage")
                 val icons = listOf(Icons.Default.Home, Icons.Default.TouchApp, Icons.Default.GridView, Icons.Default.CenterFocusStrong)
                 labels.forEachIndexed { index, label ->
-                    NavigationBarItem(selected = tab == index, onClick = { tab = index }, icon = { Icon(icons[index], null) },
+                    NavigationBarItem(selected = tab == index, onClick = { if (tab == index && index == 2) toolPage = null; tab = index; if (index != 2) toolPage = null }, icon = { Icon(icons[index], null) },
                         label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = Mint, selectedTextColor = Mint,
                             indicatorColor = Color(0xFF1C362D), unselectedIconColor = TextMuted, unselectedTextColor = TextMuted))
@@ -99,9 +113,9 @@ private fun TouchRoot(initialTool: String? = null) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                0 -> HomeScreen(prefs, { tab = 1 }, { tab = 2 }, { showNotice = true })
+                0 -> HomeScreen(prefs, { tab = 1 }, { showNotice = true }, { tool -> toolPage = tool; tab = 2 })
                 1 -> GesturesScreen(context, prefs)
-                2 -> ActionsScreen(context)
+                2 -> if (toolPage != null) ToolDestination(toolPage!!) { toolPage = null } else ActionsScreen(context) { tool -> toolPage = tool }
                 else -> CalibrationScreen(context, prefs)
             }
         }
@@ -116,7 +130,7 @@ private fun TouchRoot(initialTool: String? = null) {
     }
     if (showNotice) AlertDialog(onDismissRequest = { showNotice = false }, containerColor = Surface1,
         title = { Text("Confidentialité") },
-        text = { Text("Les gestes sont détectés par le service d’accessibilité Android. Touch ne lit pas le contenu des fenêtres. Une connexion Internet sert uniquement à vérifier les versions publiées dans le dépôt GitHub public.", color = TextMuted) },
+        text = { Text("Les gestes sont détectés par le service d’accessibilité Android ; Touch ne lit pas le contenu des fenêtres. Notes et contacts favoris restent sur cet appareil. Internet sert à vérifier les versions publiées dans le dépôt GitHub public.", color = TextMuted) },
         confirmButton = { TextButton(onClick = { showNotice = false }) { Text("Compris") } })
 }
 
@@ -137,7 +151,7 @@ private fun Header(title: String, subtitle: String? = null, action: (@Composable
 }
 
 @Composable
-private fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxWidth().background(Surface1, RoundedCornerShape(18.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
 }
 
@@ -150,9 +164,10 @@ private fun SectionTitle(title: String, trailing: String? = null, onTrailing: ((
 }
 
 @Composable
-private fun HomeScreen(prefs: android.content.SharedPreferences, onGestures: () -> Unit, onActions: () -> Unit, onPrivacy: () -> Unit) {
+private fun HomeScreen(prefs: android.content.SharedPreferences, onGestures: () -> Unit, onPrivacy: () -> Unit, onOpenTool: (String) -> Unit) {
     var enabled by remember { mutableStateOf(prefs.getBoolean(TouchPrefs.ENABLED, true)) }
     val context = LocalContext.current
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     PageColumn {
         Header("Touch", "Raccourcis par gestes")
         CardBox {
@@ -168,6 +183,9 @@ private fun HomeScreen(prefs: android.content.SharedPreferences, onGestures: () 
                 }, colors = SwitchDefaults.colors(checkedThumbColor = Bg, checkedTrackColor = Mint))
             }
             if (!isAccessibilityEnabled(context)) Button(onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color(0xFF003921)), modifier = Modifier.fillMaxWidth()) { Text("Ouvrir les autorisations") }
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                OutlinedButton(onClick = { cameraPermission.launch(Manifest.permission.CAMERA) }, modifier = Modifier.fillMaxWidth()) { Text("Autoriser le flash pour les gestes") }
+            }
         }
         CardBox {
             SectionTitle("Simulateur de poinçon", "Rayon réglable")
@@ -201,12 +219,12 @@ private fun HomeScreen(prefs: android.content.SharedPreferences, onGestures: () 
         CardBox {
             SectionTitle("Boîte d’outils rapides")
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                ToolTile(Modifier.weight(1f), "◷", "Minuteur", "Focus") { onActions() }
-                ToolTile(Modifier.weight(1f), "♫", "Média", "Lecture") { onActions() }
+                ToolTile(Modifier.weight(1f), "◷", "Minuteur", "Focus") { onOpenTool(TouchPrefs.TIMER) }
+                ToolTile(Modifier.weight(1f), "♫", "Média", "Lecture") { onOpenTool("media") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                ToolTile(Modifier.weight(1f), "☷", "Notes", "Épinglées") { onActions() }
-                ToolTile(Modifier.weight(1f), "☎", "Contacts", "Favoris") { onActions() }
+                ToolTile(Modifier.weight(1f), "☷", "Notes", "Épinglées") { onOpenTool(TouchPrefs.NOTES) }
+                ToolTile(Modifier.weight(1f), "☎", "Contacts", "Favoris") { onOpenTool("contacts") }
             }
         }
         CardBox {
@@ -233,6 +251,7 @@ private fun GesturesScreen(context: Context, prefs: android.content.SharedPrefer
     val actionsByCategory = TouchPrefs.actions.groupBy { it.category }
     PageColumn {
         Header("Gestes", "Chaque geste déclenche une action choisie")
+        ContextOverrideCard(prefs)
         TouchPrefs.gestures.forEach { gesture ->
             CardBox {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -274,7 +293,7 @@ private fun GesturesScreen(context: Context, prefs: android.content.SharedPrefer
 }
 
 @Composable
-private fun ActionsScreen(context: Context) {
+private fun ActionsScreen(context: Context, onOpenTool: (String) -> Unit) {
     val grouped = TouchPrefs.actions.groupBy { it.category }
     var pendingTorch by remember { mutableStateOf(false) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -291,11 +310,17 @@ private fun ActionsScreen(context: Context) {
                         Icon(iconFor(action.key), null, tint = Mint)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) { Text(action.label, fontWeight = FontWeight.SemiBold); Text(action.detail, color = TextMuted, fontSize = 11.sp) }
                         TextButton(onClick = {
-                            if (action.key == TouchPrefs.TORCH && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                                pendingTorch = true
-                                cameraPermission.launch(Manifest.permission.CAMERA)
-                            } else TouchAccessibilityService.currentAction(context, action.key)
-                        }) { Text("Tester", color = Mint, fontSize = 11.sp) }
+                            when (action.key) {
+                                TouchPrefs.NOTES, TouchPrefs.TIMER, TouchPrefs.QUICK_WIDGETS -> onOpenTool(action.key)
+                                TouchPrefs.OPEN_APP -> onOpenTool("app_picker")
+                                TouchPrefs.TASKER -> onOpenTool("tasker")
+                                TouchPrefs.TORCH -> if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                                    pendingTorch = true
+                                    cameraPermission.launch(Manifest.permission.CAMERA)
+                                } else TouchAccessibilityService.currentAction(context, action.key)
+                                else -> TouchAccessibilityService.currentAction(context, action.key)
+                            }
+                        }) { Text(if (action.key == TouchPrefs.OPEN_APP) "Choisir" else if (action.key in listOf(TouchPrefs.NOTES, TouchPrefs.TIMER, TouchPrefs.QUICK_WIDGETS, TouchPrefs.TASKER)) "Ouvrir" else "Tester", color = Mint, fontSize = 11.sp) }
                     }
                 }
             }
@@ -319,6 +344,7 @@ private fun CalibrationScreen(context: Context, prefs: android.content.SharedPre
     var y by remember { mutableFloatStateOf(prefs.getInt(TouchPrefs.ZONE_Y_DP, 0).toFloat()) }
     var width by remember { mutableFloatStateOf(prefs.getInt(TouchPrefs.ZONE_WIDTH_DP, 82).toFloat()) }
     var height by remember { mutableFloatStateOf(prefs.getInt(TouchPrefs.ZONE_HEIGHT_DP, 50).toFloat()) }
+    var landscape by remember { mutableStateOf(prefs.getBoolean(TouchPrefs.LANDSCAPE, false)) }
     PageColumn {
         Header("Calibrage", "Ajuste la zone tactile à ton téléphone")
         CardBox {
@@ -333,6 +359,30 @@ private fun CalibrationScreen(context: Context, prefs: android.content.SharedPre
             SliderSetting("Largeur", "${width.toInt()} dp", width, 48f..160f) { width = it; saveZone(prefs, x, y, width, height) }
             SliderSetting("Hauteur", "${height.toInt()} dp", height, 32f..96f) { height = it; saveZone(prefs, x, y, width, height) }
             Button(onClick = { TouchAccessibilityService.refreshZone() }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color(0xFF003921))) { Text("Appliquer la zone") }
+        }
+        CardBox {
+            Text("Retour haptique", fontWeight = FontWeight.SemiBold)
+            Text("Choisis la sensation au déclenchement d’un geste.", fontSize = 12.sp, color = TextMuted)
+            var profile by remember { mutableStateOf(prefs.getString(TouchPrefs.HAPTIC_PROFILE, "standard") ?: "standard") }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf("off" to "Désactivé", "soft" to "Doux", "standard" to "Standard", "mechanical" to "Mécanique", "deep" to "Profond").forEach { (key, label) ->
+                    FilterChip(selected = profile == key, onClick = { profile = key; prefs.edit().putString(TouchPrefs.HAPTIC_PROFILE, key).apply() }, label = { Text(label, fontSize = 10.sp) })
+                }
+            }
+        }
+        CardBox {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Autoriser en mode paysage", fontWeight = FontWeight.SemiBold)
+                    Text("Désactivé par défaut pour éviter les gestes accidentels en jeu ou vidéo.", fontSize = 11.sp, color = TextMuted)
+                }
+                Switch(checked = landscape, onCheckedChange = { landscape = it; prefs.edit().putBoolean(TouchPrefs.LANDSCAPE, it).apply(); TouchAccessibilityService.refreshZone() }, colors = SwitchDefaults.colors(checkedThumbColor = Bg, checkedTrackColor = Mint))
+            }
+        }
+        CardBox {
+            Text("Garder Touch actif", fontWeight = FontWeight.SemiBold)
+            Text("Certains fabricants suspendent les services en arrière-plan. Si les gestes s’arrêtent, autorise Touch dans les réglages de batterie.", fontSize = 12.sp, color = TextMuted)
+            OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text("Ouvrir les réglages de batterie") }
         }
         CardBox {
             Text("L’emplacement réel dépend des marges système et de la découpe de l’écran. Ajuste la zone, puis teste les gestes depuis une autre application.", fontSize = 12.sp, color = TextMuted)
